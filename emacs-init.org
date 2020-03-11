@@ -1,0 +1,489 @@
+* Meta
+** Use Org-mode to config emacs
+
+You need to add some code to =init.el= in order to use =org-mode= to config emacs.
+
+#+BEGIN_SRC 
+(require 'package)
+(setq package-enable-at-startup nil)
+(add-to-list 'package-archives
+             '("melpa" . "https://melpa.org/packages/"))
+(unless package--initialized (package-initialize))
+
+(require 'org)
+(org-babel-load-file (expand-file-name "~/.emacs.d/emacs-init.org"))
+#+END_SRC
+
+* Basic
+** Network Proxy
+
+Use system network proxy (Clash-X on OSX).
+
+#+BEGIN_SRC emacs-lisp
+  (setq url-proxy-services
+	'(("no_proxy" . "^\\(localhost\\|10.*\\)")
+	  ("http" . "127.0.0.1:7890")
+	  ("https" . "127.0.0.1:7890")
+	  ("socks5" . "127.0.0.1:7891")))
+#+END_SRC
+
+** Use-package
+
+#+BEGIN_SRC emacs-lisp
+  (unless (package-installed-p 'use-package)
+    (package-refresh-contents)
+    (package-install 'use-package))
+  (eval-when-compile
+    (require 'use-package))
+#+END_SRC
+
+** GUI
+
+Disable some GUI components.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package emacs
+    :custom
+    (use-file-dialog nil)
+    (use-dialog-box nil)
+    (inhibit-splash-screen t)
+    :config
+    (tool-bar-mode -1)
+    (scroll-bar-mode -1)
+    (global-unset-key (kbd "C-z"))
+    (global-unset-key (kbd "C-x C-z"))
+    (global-unset-key (kbd "C-h h")))
+#+END_SRC
+
+Typeface.
+
+#+BEGIN_SRC emacs-lisp
+  (set-frame-font "Hack-14" t t)
+#+END_SRC
+
+** Custom file
+   [[info:emacs#Saving%20Customizations][info:emacs#Saving Customizations]]
+#+BEGIN_SRC emacs-lisp
+  (setq custom-file "~/.emacs.d/.emacs-custom.el")
+  (load custom-file)
+#+END_SRC
+* Directory, Buffer, Window
+** Dired
+
+#+BEGIN_SRC emacs-lisp
+  (use-package dired
+    :custom
+    (delete-by-moving-to-trash t)
+    (dired-listing-switches "-AFhlv --group-directories-first")
+    (dired-dwim-target t)
+    :hook
+    (dired-mode . hl-line-mode)
+    :bind (("s-d" . dired)
+	   ("s-D" . dired-other-window)
+	   :map dired-mode-map
+	   ("z" . (lambda () (interactive)
+		    (let ((fn (dired-get-file-for-visit)))
+		      (start-process "default-app" nil "open" fn))))))
+#+END_SRC
+
+Dired-x functions.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package dired-x
+    :after dired
+    :bind (("C-x C-j" . dired-jump)
+	   ("s-j" . dired-jump)
+	   ("C-x 4 C-j" . dired-jump-other-window)
+	   ("s-J" . dired-jump-other-window)))
+#+END_SRC
+
+** Window
+
+Change some key bindings on window management.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package window
+    :bind (("s-n" . next-buffer)
+	   ("s-p" . previous-buffer)
+	   ("s-o" . other-window)
+	   ("s-2" . split-window-below)
+	   ("s-3" . split-window-right)
+	   ("s-0" . delete-window)
+	   ("s-1" . delete-other-windows)))
+
+  (use-package winner
+    :hook (after-init . winner-mode)
+    :bind (("<s-right>" . winner-redo)
+	   ("<s-left>" . winner-undo)))
+#+END_SRC
+
+** Git front-end (Magit)
+
+#+BEGIN_SRC emacs-lisp
+  (use-package magit
+    :ensure t
+    :custom
+    (magit-completing-read-function 'magit-ido-completing-read)
+    :bind (("C-x g" . magit-status)
+	   ("s-g" . magit-status)))
+#+END_SRC
+
+* Search, History
+** Ido
+
+Use the build-in Ido package to improve search results.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package ido
+    :init
+    (setq ido-everywhere t)
+    (setq ido-enable-flex-matching t)
+    (setq ido-enable-regexp nil)
+    (setq ido-enable-prefix nil)
+    (setq ido-all-frames nil)
+    (setq ido-use-virtual-buffers t)
+    (setq ido-use-faces t)
+    (setq ido-decorations
+	  '(" "
+	    "   "
+	    " | "
+	    " | …"
+	    "["
+	    "]"
+	    " [No match]"
+	    " [Matched]"
+	    " [Not readable]"
+	    " [Too big]"
+	    " [Confirm]"
+	    " "
+	    " "))
+    :config
+    (ido-mode 1)
+    :bind (("s-f" . ido-find-file)
+	   ("s-F" . ido-find-file-other-window)
+	   ("s-d" . ido-dired)
+	   ("s-D" . ido-dired-other-window)
+	   ("s-b" . ido-switch-buffer)
+	   ("s-B" . ido-switch-buffer-other-window)))
+#+END_SRC
+
+** Recentf
+
+#+BEGIN_SRC emacs-lisp
+  (use-package recentf
+    :config
+    (recentf-mode 1))
+#+END_SRC
+
+* Org-mode
+
+#+BEGIN_SRC emacs-lisp
+  (use-package org
+    ;; Get the newest version of org-mode
+    :ensure org-plus-contrib
+    :pin org
+    :config
+    ;; agenda and basic directory structure
+    (setq org-directory "~/Dropbox/Org")
+    (setq org-agenda-files '("~/Dropbox/Org/gtd.org"))
+    (setq org-refile-targets '(("~/Dropbox/Org/gtd.org" . (:maxlevel . 1))
+			       ("~/Dropbox/Org/someday.org" . (:maxlevel . 1))
+			       ("~/Dropbox/Org/notes.org" . (:maxlevel . 1))))
+    (setq org-refile-use-outline-path t)
+    ;; general
+    (setq org-special-ctrl-a/e t)
+    :bind (("C-c l" . org-store-link)))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package org-capture
+    :after org
+    :config
+    (setq org-capture-templates
+	  '(("t" "Todo" entry (file+headline "~/Dropbox/Org/inbox.org" "INBOX")
+	     "* TODO %?\n  %i\n  %a")
+	    ("j" "Journal" entry (file+olp+datetree "~/Dropbox/Org/journal.org")
+	     "* %?\nEntered on %U\n  %i\n  %a")))
+    :bind ("C-c c" . org-capture))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package org-agenda
+    :after org
+    :config
+    :bind ("C-c a" . org-agenda))
+#+END_SRC
+
+Add a desktop notification when org timer run out.
+#+begin_src emacs-lisp
+  (use-package org-clock
+    :config
+    (setq org-show-notification-handler
+	  (lambda (msg)
+	      (start-process "Time Out!"
+			     nil
+			     (executable-find "terminal-notifier")
+			     "-message" msg
+			     "-title" "Time Out!"
+			     ))))
+#+end_src
+
+* Email
+
+Use mbsync + davmail to retrieve mail from exchange mail server.
+Use mu4e as front-end and build-in smtpmail to send mails.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package smtpmail
+    :custom
+    (smtpmail-queue-mail nil)
+    (smtpmail-queue-dir "~/Maildir/queue/cur")
+    (smtpmail-debug-info t))
+
+  (use-package smtpmail-async
+    :after smtpmail
+    :custom
+    (send-mail-function 'async-smtpmail-send-it)
+    (message-send-mail-function 'async-smtpmail-send-it))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package mu4e
+    :load-path "/usr/local/share/emacs/site-lisp/mu/mu4e/"
+    :after (smtpmail smtpmail-async)
+    :commands mu4e
+    :custom
+    (mail-user-agent 'mu4e-user-agent)
+    (mu4e-get-mail-command "mbsync -c ~/.emacs.d/.mbsyncrc work && proxychains4 mbsync -c ~/.emacs.d/.mbsyncrc gmail")
+    (mu4e-update-interval 300)
+    (mu4e-headers-auto-update t)
+    (mu4e-maildir "~/Maildir")
+    (mu4e-sent-messages-behavior 'delete)
+    (message-kill-buffer-on-exit t)
+    (mu4e-attachment-dir  "~/Downloads")
+    (mu4e-view-show-images t)
+    (mu4e-change-filenames-when-moving t)
+    :config
+    (when (fboundp 'imagemagick-register-types)
+      (imagemagick-register-types))
+    ;;
+    ;; Xapian, the search engine of mu has a poor support of CJK characters,
+    ;; which causes only query contains no more than 2 CJK characters works.
+    ;;
+    ;; https://researchmap.jp/?page_id=457
+    ;;
+    ;; This workaroud breaks any CJK words longer than 2 characters into
+    ;; combines of bi-grams. Example: 我爱你 -> (我爱 爱你)
+    ;; from https://github.com/panjie/mu4e-goodies/blob/master/mu4e-goodies-hacks.el
+    ;;
+    (setenv "XAPIAN_CJK_NGRAM" "yes")
+    (defun mu4e-goodies~break-cjk-word (word)
+      "Break CJK word into list of bi-grams like: 我爱你 -> 我爱 爱你"
+      (if (or (<= (length word) 2)
+	      (equal (length word) (string-bytes word))) ; only ascii chars
+	  word
+	(let ((pos nil)
+	      (char-list nil)
+	      (br-word nil))
+	  (if (setq pos (string-match ":" word))     ; like: "s:abc"
+	      (concat (substring word 0 (+ 1 pos))
+		      (mu4e-goodies~break-cjk-word (substring word (+ 1 pos))))
+	    (if (memq 'ascii (find-charset-string word)) ; ascii mixed with others like: abc你好
+		word
+	      (progn
+		(setq char-list (split-string word "" t))
+		(while (cdr char-list)
+		  (setq br-word (concat br-word (concat (car char-list) (cadr char-list)) " "))
+		  (setq char-list (cdr char-list)))
+		br-word))))))
+
+    (defun mu4e-goodies~break-cjk-query (expr)
+      "Break CJK strings into bi-grams in query."
+      (let ((word-list (split-string expr " " t))
+	    (new ""))
+	(dolist (word word-list new)
+	  (setq new (concat new (mu4e-goodies~break-cjk-word word) " ")))))
+
+    (setq mu4e-query-rewrite-function 'mu4e-goodies~break-cjk-query)
+
+    ;; mu4e context settings
+    (setq mu4e-context-policy 'pick-first)
+    (setq mu4e-compose-context-policy 'always-ask)
+    (setq mu4e-contexts
+	  `( ,(make-mu4e-context
+	       :name "Work"
+	       :enter-func (lambda () (mu4e-message "Entering Work context"))
+	       :leave-func (lambda () (mu4e-message "Leaving Work context"))
+	       ;; we match based on the contact-fields of the message
+	       :match-func (lambda (msg)
+			     (when msg
+			       (mu4e-message-contact-field-matches
+				msg
+				'(:from :to :cc :bcc) "dongsh23@chinaunicom.cn")))
+	       :vars '((user-mail-address . "dongsh23@chinaunicom.cn"  )
+		       (user-full-name . "Shuanghe Dong" )
+		       (mu4e-sent-folder . "/mbsyncmail/sent")
+		       (mu4e-drafts-folder . "/mbsyncmail/drafts")
+		       (mu4e-trash-folder . "/mbsyncmail/trash")
+		       (mu4e-refile-folder . "/mbsyncmail/archive")
+		       (mu4e-compose-signature .
+					       (concat
+						"董双赫 | 中国联通技术部\n"
+						"SHUANGHE DONG | CHINA UNICOM TECHNOLOGY DEPT.\n"))
+		       (smtpmail-default-smtp-server . "localhost")
+		       (smtpmail-smtp-server . "localhost")
+		       (smtpmail-smtp-service . 1025)
+		       (mu4e-maildir-shortcuts . (("/mbsyncmail/INBOX" . ?i)
+						  ("/mbsyncmail/sent" . ?s)
+						  ("/mbsyncmail/drafts" . ?d)
+						  ("/mbsyncmail/trash" . ?t)
+						  ("/mbsyncmail/archive" . ?a))
+					       )))
+	     ,(make-mu4e-context
+	       :name "Private"
+	       :enter-func (lambda () (mu4e-message "Switch to the Private context"))
+	       ;; no leave-func
+	       ;; we match based on the contact-fields of the message
+	       :match-func (lambda (msg)
+			     (when msg
+			       (mu4e-message-contact-field-matches
+				msg
+				'(from :to :cc :bcc) "clivetung@gmail.com")))
+	       :vars '( ( user-mail-address . "clivetung@gmail.com" )
+			( user-full-name . "Clive" )
+			(mu4e-sent-folder . "/gmail/sent")
+			(mu4e-drafts-folder . "/gmail/drafts")
+			(mu4e-trash-folder . "/gmail/trash")
+			(mu4e-refile-folder . "/gmail/archive")
+			( mu4e-compose-signature  .
+						  (concat
+						   "Clive\n"
+						   "\n"))
+			(smtpmail-default-smtp-server . "smtp.gmail.com")
+			(smtpmail-smtp-server . "smtp.gmail.com")
+			(smtpmail-smtp-service . 587)
+			(mu4e-maildir-shortcuts . (("/gmail/INBOX" . ?i)
+						   ("/gmail/sent" . ?s)
+						   ("/gmail/drafts" . ?d)
+						   ("/gmail/trash" . ?t)
+						   ("/gmail/archive" . ?a))
+
+						)))))
+
+    :bind (("C-x m" . mu4e)
+    :map mu4e-headers-mode-map
+    ("C-c c" . org-mu4e-store-and-capture)
+    :map mu4e-view-mode-map
+    ("C-c c" . 'org-mu4e-store-and-capture)))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  ;; (use-package mu4e-icalendar
+  ;;   :config
+  ;;   (mu4e-icalendar-setup))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package mu4e-alert
+    :ensure t
+    :after mu4e
+    :config
+    (mu4e-alert-set-default-style 'notifier)
+    (mu4e-alert-enable-notifications)
+    (mu4e-alert-enable-mode-line-display))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package org-mu4e
+    :custom
+    (org-mu4e-link-query-in-headers-mode nil))
+#+END_SRC
+
+* Spelling/Linting
+
+#+BEGIN_SRC emacs-lisp
+  (use-package flyspell
+    :hook ((org-mode . flyspell-mode)
+	   (prog-mode . flyspell-prog-mode)))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package flycheck
+    :ensure t
+    :custom
+    (flycheck-disabled-checkers '(emacs-lisp-checkdoc))
+    :hook ((prog-mode . flycheck-mode)))
+#+END_SRC
+* Elfeed
+
+#+BEGIN_SRC emacs-lisp
+  (use-package elfeed
+    :ensure t
+    :commands elfeed
+    :config
+    (setq elfeed-db-directory "~/Dropbox/shared/elfeed")
+    (setq elfeed-enclosure-default-dir "~/Downloads")
+    (setf elfeed-curl-extra-arguments '("--socks5-hostname" "127.0.0.1:7891"))
+
+    ;;functions to support syncing .elfeed between machines
+    ;;makes sure elfeed reads index from disk before launching
+    (defun bjm/elfeed-load-db-and-open ()
+      "Wrapper to load the elfeed db from disk before opening"
+      (interactive)
+      (elfeed-db-load)
+      (elfeed)
+      (elfeed-search-update--force))
+
+    ;;write to disk when quiting
+    (defun bjm/elfeed-save-db-and-bury ()
+      "Wrapper to save the elfeed db to disk before burying buffer"
+      (interactive)
+      (elfeed-db-save)
+      (quit-window))
+
+    :bind (("C-x w" . 'bjm/elfeed-load-db-and-open)
+	   :map elfeed-search-mode-map
+		("q" . bjm/elfeed-save-db-and-bury))
+    )
+#+END_SRC
+
+Store feeds in Org-mode:
+
+#+BEGIN_SRC emacs-lisp
+  (use-package elfeed-org
+    :ensure t
+    :config
+    (elfeed-org)
+    (setq rmh-elfeed-org-files (list "~/Dropbox/shared/elfeed.org")))
+#+END_SRC
+
+* OSX
+
+Use GNU version of tools. Install with =brew install coreutils= command.
+Replace =ls= with =gls=.
+
+#+BEGIN_SRC emacs-lisp
+  (setq insert-directory-program "gls" dired-use-ls-dired t)
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package exec-path-from-shell
+    :if (memq window-system '(mac ns))
+    :ensure t
+    :config
+    (exec-path-from-shell-initialize))
+#+END_SRC
+
+* Blog with Hugo
+#+begin_src emacs-lisp
+  (use-package ox-hugo
+    :ensure t
+    :after ox)
+#+end_src
+
+* Misc
+** Shell
+#+begin_src emacs-lisp
+  (use-package shell
+    :bind (("<s-return>" . shell)))
+#+end_src
