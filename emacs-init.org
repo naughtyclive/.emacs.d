@@ -22,9 +22,9 @@ Use system network proxy (Clash-X on OSX).
 #+BEGIN_SRC emacs-lisp
   (setq url-proxy-services
 	'(("no_proxy" . "^\\(localhost\\|10.*\\)")
-	  ("http" . "127.0.0.1:7890")
-	  ("https" . "127.0.0.1:7890")
-	  ("socks5" . "127.0.0.1:7891")))
+	  ("http" . "127.0.0.1:6152")
+	  ("https" . "127.0.0.1:6152")
+	  ("socks5" . "127.0.0.1:6153")))
 #+END_SRC
 
 ** Use-package
@@ -50,16 +50,26 @@ Disable some GUI components.
     :config
     (tool-bar-mode -1)
     (scroll-bar-mode -1)
+    (fset 'yes-or-no-p 'y-or-n-p)
+    (global-auto-revert-mode t)
+    (display-time-mode t)
     (global-unset-key (kbd "C-z"))
     (global-unset-key (kbd "C-x C-z"))
     (global-unset-key (kbd "C-h h")))
 #+END_SRC
 
 Typeface.
-
 #+BEGIN_SRC emacs-lisp
   (set-frame-font "Hack-14" t t)
 #+END_SRC
+
+Use =beacon= package to make cursor more obvious.
+#+begin_src emacs-lisp
+  (use-package beacon
+    :ensure t
+    :config
+    (beacon-mode 1))
+#+end_src
 
 ** Custom file
    [[info:emacs#Saving%20Customizations][info:emacs#Saving Customizations]]
@@ -73,8 +83,9 @@ Typeface.
 #+BEGIN_SRC emacs-lisp
   (use-package dired
     :custom
+    (dired-auto-revert-buffer t)
     (delete-by-moving-to-trash t)
-    (dired-listing-switches "-AFhlv --group-directories-first")
+    (dired-listing-switches "-alh --group-directories-first")
     (dired-dwim-target t)
     :hook
     (dired-mode . hl-line-mode)
@@ -185,14 +196,20 @@ Use the build-in Ido package to improve search results.
     :config
     ;; agenda and basic directory structure
     (setq org-directory "~/Dropbox/Org")
-    (setq org-agenda-files '("~/Dropbox/Org/gtd.org"))
-    (setq org-refile-targets '(("~/Dropbox/Org/gtd.org" . (:maxlevel . 1))
-			       ("~/Dropbox/Org/someday.org" . (:maxlevel . 1))
-			       ("~/Dropbox/Org/notes.org" . (:maxlevel . 1))))
+    (setq org-agenda-files '("~/Dropbox/Org/gtd.org"
+			     "~/Dropbox/Org/inbox.org"))
+    (setq org-refile-targets '(("~/Dropbox/Org/gtd.org" . (:maxlevel . 1))))
     (setq org-refile-use-outline-path t)
     ;; general
     (setq org-special-ctrl-a/e t)
-    :bind (("C-c l" . org-store-link)))
+    ;; bind a key to access agenda view faster
+    (defun clive/org-agenda-view (&optional arg)
+      (interactive)
+      (org-agenda arg "n"))
+    :bind (("C-c l" . org-store-link)
+	   ("s-." . 'clive/org-agenda-view)
+	   :map org-mode-map
+	   ("C-c g" . org-mac-grab-link)))
 #+END_SRC
 
 #+BEGIN_SRC emacs-lisp
@@ -211,6 +228,8 @@ Use the build-in Ido package to improve search results.
   (use-package org-agenda
     :after org
     :config
+    (setq org-agenda-span 'day)
+    (add-to-list 'org-modules 'org-habit)
     :bind ("C-c a" . org-agenda))
 #+END_SRC
 
@@ -218,17 +237,117 @@ Add a desktop notification when org timer run out.
 #+begin_src emacs-lisp
   (use-package org-clock
     :config
+    (setq org-clock-idle-time 10)
     (setq org-show-notification-handler
 	  (lambda (msg)
-	      (start-process "Time Out!"
-			     nil
-			     (executable-find "terminal-notifier")
-			     "-message" msg
-			     "-title" "Time Out!"
-			     ))))
+	    (start-process "Time Out!"
+			   nil
+			   (executable-find "terminal-notifier")
+			   "-message" msg
+			   "-title" "Time Out!"
+			   ))))
 #+end_src
 
-* Email
+
+Use pandoc to convert a Org-mode buffer to MS word file.
+#+begin_src emacs-lisp
+(defun org-export-docx ()
+  (interactive)
+  (let ((docx-file (concat (file-name-sans-extension (buffer-file-name)) ".docx"))
+           (template-file (expand-file-name "~/Dropbox/Org/references/template.docx")))
+    (shell-command (format "pandoc %s -o %s --reference-doc=%s" (buffer-file-name) docx-file template-file))
+    (message "Convert finish: %s" docx-file)))
+#+end_src
+
+* Spelling/Linting
+
+#+BEGIN_SRC emacs-lisp
+  (use-package flyspell
+    :hook ((org-mode . flyspell-mode)
+	   (prog-mode . flyspell-prog-mode)))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package flycheck
+    :ensure t
+    :custom
+    (flycheck-disabled-checkers '(emacs-lisp-checkdoc))
+    :hook ((prog-mode . flycheck-mode)))
+#+END_SRC
+* Elfeed
+
+#+BEGIN_SRC emacs-lisp
+  (use-package elfeed
+    :ensure t
+    :commands elfeed
+    :config
+    (setq elfeed-db-directory "~/Dropbox/shared/elfeed")
+    (setq elfeed-enclosure-default-dir "~/Downloads")
+    (setf elfeed-curl-extra-arguments '("--socks5-hostname" "127.0.0.1:6153"))
+
+    ;;functions to support syncing .elfeed between machines
+    ;;makes sure elfeed reads index from disk before launching
+    (defun bjm/elfeed-load-db-and-open ()
+      "Wrapper to load the elfeed db from disk before opening"
+      (interactive)
+      (elfeed-db-load)
+      (elfeed)
+      (elfeed-search-update--force))
+
+    ;;write to disk when quiting
+    (defun bjm/elfeed-save-db-and-bury ()
+      "Wrapper to save the elfeed db to disk before burying buffer"
+      (interactive)
+      (elfeed-db-save)
+      (quit-window))
+
+    :bind (("C-x w" . 'bjm/elfeed-load-db-and-open)
+	   :map elfeed-search-mode-map
+		("q" . bjm/elfeed-save-db-and-bury))
+    )
+#+END_SRC
+
+Store feeds in Org-mode:
+
+#+BEGIN_SRC emacs-lisp
+  (use-package elfeed-org
+    :ensure t
+    :config
+    (elfeed-org)
+    (setq rmh-elfeed-org-files (list "~/Dropbox/shared/elfeed.org")))
+#+END_SRC
+
+* OSX
+
+Use GNU version of tools. Install with =brew install coreutils= command.
+Replace =ls= with =gls=.
+
+#+BEGIN_SRC emacs-lisp
+  (setq insert-directory-program "gls" dired-use-ls-dired t)
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (use-package exec-path-from-shell
+    :if (memq window-system '(mac ns))
+    :ensure t
+    :config
+    (exec-path-from-shell-initialize))
+#+END_SRC
+
+* Blog with Hugo
+#+begin_src emacs-lisp
+  (use-package ox-hugo
+    :ensure t
+    :after ox)
+#+end_src
+
+* Misc
+** Shell
+#+begin_src emacs-lisp
+  (use-package shell
+    :bind (("<s-return>" . shell)))
+#+end_src
+* COMMENT Email
 
 Use mbsync + davmail to retrieve mail from exchange mail server.
 Use mu4e as front-end and build-in smtpmail to send mails.
@@ -399,91 +518,3 @@ Use mu4e as front-end and build-in smtpmail to send mails.
     (org-mu4e-link-query-in-headers-mode nil))
 #+END_SRC
 
-* Spelling/Linting
-
-#+BEGIN_SRC emacs-lisp
-  (use-package flyspell
-    :hook ((org-mode . flyspell-mode)
-	   (prog-mode . flyspell-prog-mode)))
-#+END_SRC
-
-#+BEGIN_SRC emacs-lisp
-  (use-package flycheck
-    :ensure t
-    :custom
-    (flycheck-disabled-checkers '(emacs-lisp-checkdoc))
-    :hook ((prog-mode . flycheck-mode)))
-#+END_SRC
-* Elfeed
-
-#+BEGIN_SRC emacs-lisp
-  (use-package elfeed
-    :ensure t
-    :commands elfeed
-    :config
-    (setq elfeed-db-directory "~/Dropbox/shared/elfeed")
-    (setq elfeed-enclosure-default-dir "~/Downloads")
-    (setf elfeed-curl-extra-arguments '("--socks5-hostname" "127.0.0.1:7891"))
-
-    ;;functions to support syncing .elfeed between machines
-    ;;makes sure elfeed reads index from disk before launching
-    (defun bjm/elfeed-load-db-and-open ()
-      "Wrapper to load the elfeed db from disk before opening"
-      (interactive)
-      (elfeed-db-load)
-      (elfeed)
-      (elfeed-search-update--force))
-
-    ;;write to disk when quiting
-    (defun bjm/elfeed-save-db-and-bury ()
-      "Wrapper to save the elfeed db to disk before burying buffer"
-      (interactive)
-      (elfeed-db-save)
-      (quit-window))
-
-    :bind (("C-x w" . 'bjm/elfeed-load-db-and-open)
-	   :map elfeed-search-mode-map
-		("q" . bjm/elfeed-save-db-and-bury))
-    )
-#+END_SRC
-
-Store feeds in Org-mode:
-
-#+BEGIN_SRC emacs-lisp
-  (use-package elfeed-org
-    :ensure t
-    :config
-    (elfeed-org)
-    (setq rmh-elfeed-org-files (list "~/Dropbox/shared/elfeed.org")))
-#+END_SRC
-
-* OSX
-
-Use GNU version of tools. Install with =brew install coreutils= command.
-Replace =ls= with =gls=.
-
-#+BEGIN_SRC emacs-lisp
-  (setq insert-directory-program "gls" dired-use-ls-dired t)
-#+END_SRC
-
-#+BEGIN_SRC emacs-lisp
-  (use-package exec-path-from-shell
-    :if (memq window-system '(mac ns))
-    :ensure t
-    :config
-    (exec-path-from-shell-initialize))
-#+END_SRC
-
-* Blog with Hugo
-#+begin_src emacs-lisp
-  (use-package ox-hugo
-    :ensure t
-    :after ox)
-#+end_src
-
-* Misc
-** Shell
-#+begin_src emacs-lisp
-  (use-package shell
-    :bind (("<s-return>" . shell)))
-#+end_src
